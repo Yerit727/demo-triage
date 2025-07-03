@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Demo Triaje Hospitalario</title>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      const API = '';
+
+      function renderLogin() {
+        document.getElementById('root').innerHTML = `
+          <form id="loginForm">
+            <h2>Iniciar sesión DEMO</h2>
+            <input name="email" placeholder="email" required />
+            <input name="password" type="password" placeholder="contraseña" required />
+            <button>Ingresar</button>
+          </form>
+        `;
+        document.getElementById('loginForm').onsubmit = async e => {
+          e.preventDefault();
+          const email = e.target.email.value, password = e.target.password.value;
+          const res = await fetch(API + '/api/users/login', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          if (res.ok) {
+            window.user = await res.json();
+            renderHome();
+          } else {
+            alert('Login incorrecto');
+          }
+        };
+      }
+
+      function renderHome() {
+        fetch(API + '/api/patients').then(r => r.json()).then(pacientes => {
+          fetch(API + '/api/triage').then(r => r.json()).then(triages => {
+            fetch(API + '/api/dashboard/indicators').then(r => r.json()).then(indicadores => {
+              let html = `
+                <h2>Demo Software Triaje Hospitalario</h2>
+                <button id="btnPac">Pacientes</button>
+                <button id="btnDash">Indicadores</button>
+                <button id="btnSalir">Salir</button>
+                <div id="view"></div>
+              `;
+              document.getElementById('root').innerHTML = html;
+              document.getElementById('btnPac').onclick = () => renderPacientes(pacientes, triages, indicadores);
+              document.getElementById('btnDash').onclick = () => renderDashboard(indicadores);
+              document.getElementById('btnSalir').onclick = () => { window.user = null; renderLogin(); };
+              renderPacientes(pacientes, triages, indicadores);
+            });
+          });
+        });
+      }
+
+      function renderPacientes(pacientes, triages, indicadores) {
+        let html = `
+          <form id="pacForm">
+            <h3>Registrar paciente</h3>
+            <input name="nombre" placeholder="Nombre" required />
+            <select name="sexo"><option value="M">M</option><option value="F">F</option></select>
+            <input name="edad" type="number" placeholder="Edad" required />
+            <button>Agregar</button>
+          </form>
+          <h4>Pacientes</h4>
+          <ul>
+            ${pacientes.map(p => `<li>${p.nombre} - ${p.sexo} - ${p.edad} años <button data-id="${p.id}">Triaje</button></li>`).join('')}
+          </ul>
+          <div id="triajeDiv"></div>
+        `;
+        document.getElementById('view').innerHTML = html;
+        document.getElementById('pacForm').onsubmit = async e => {
+          e.preventDefault();
+          const data = {
+            nombre: e.target.nombre.value,
+            sexo: e.target.sexo.value,
+            edad: e.target.edad.value,
+            fecha_llegada: new Date().toISOString()
+          };
+          await fetch(API + '/api/patients', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          renderHome();
+        };
+        document.querySelectorAll('button[data-id]').forEach(btn => {
+          btn.onclick = () => renderTriaje(btn.getAttribute('data-id'));
+        });
+      }
+
+      function renderTriaje(id) {
+        document.getElementById('triajeDiv').innerHTML = `
+          <form id="triajeForm">
+            <h4>Registrar Triaje</h4>
+            <select name="cat">
+              <option>rojo</option>
+              <option>naranja</option>
+              <option>amarillo</option>
+              <option>verde</option>
+              <option>azul</option>
+            </select>
+            <input name="flujograma" placeholder="Flujograma" required />
+            <input name="discriminador" placeholder="Discriminador" required />
+            <button>Registrar</button>
+          </form>
+        `;
+        document.getElementById('triajeForm').onsubmit = async e => {
+          e.preventDefault();
+          await fetch(API + '/api/triage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paciente_id: Number(id),
+              usuario_id: window.user.id,
+              categoria_MTS: e.target.cat.value,
+              flujograma: e.target.flujograma.value,
+              discriminador: e.target.discriminador.value,
+              tiempo_triaje: 120
+            })
+          });
+          renderHome();
+        };
+      }
+
+      function renderDashboard(indicadores) {
+        document.getElementById('view').innerHTML = `
+          <h3>Indicadores</h3>
+          <p>Total de triages: ${indicadores.totalTriages}</p>
+          <p>Tasa cumplimiento: ${indicadores.tasaCumplimiento}%</p>
+          <h4>Distribución:</h4>
+          <ul>
+            ${Object.entries(indicadores.distribucion).map(([cat, val]) =>
+              `<li>${cat}: ${val}</li>`).join('')}
+          </ul>
+        `;
+      }
+
+      renderLogin();
+    </script>
+  </body>
+</html>
